@@ -12,6 +12,7 @@ import (
 )
 
 type Config struct {
+	Test       bool               `json:"test"`
 	Salesforce *force.Salesforce  `json:"salesforce"`
 	Csv        *csv.Csv           `json:"csv"`
 	Lookups    map[string]*Lookup `json:"lookups"`

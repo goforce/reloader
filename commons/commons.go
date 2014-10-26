@@ -18,6 +18,7 @@ type Report interface {
 	Skip()
 	Success(created bool, id string)
 	Error(message string)
+	Output(record Record)
 }
 
 type Source interface {
@@ -43,15 +44,7 @@ type Writer interface {
 	Close() error
 }
 
-//type EndPoint struct {
-//	Active string `json:"active"`
-//}
-
 type ValueValidator func(string, interface{}) error
-
-//func ToCsvString(value interface{}) string {
-//	return fmt.Sprint(value)
-//}
 
 func GetAllFields(rec Record) []string {
 	var flatten func([]string, Record)

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	. "github.com/goforce/api/commons"
+	"github.com/goforce/api/soap"
 	"github.com/goforce/log"
 	"github.com/goforce/reloader/commons"
 	"strings"
@@ -137,23 +138,31 @@ func (writer *ForceWriter) Flush() error {
 	go func() {
 		if len(batch.records) > 0 {
 			// write batch
+			var results []soap.DmlResult
+			var err error
 			if writer.operation == "UPSERT" {
-				results, err := writer.instance.connection.Upsert(batch.records, writer.externalId)
-				if err != nil {
-					log.Println(commons.ERRORS, err)
-					panic("error upserting to salesforce")
-				}
-				if len(batch.records) != len(results) {
-					log.Println(commons.ERRORS, results)
-					panic("incorrect result returned from upsert")
-				}
-				for i, report := range batch.reports {
-					result := results[i]
-					if result.Success {
-						report.Success(result.Created, result.Id)
-					} else {
-						report.Error(result.Errors.Message)
-					}
+				results, err = writer.instance.connection.Upsert(batch.records, writer.externalId)
+			} else if writer.operation == "UPDATE" {
+				results, err = writer.instance.connection.Update(batch.records)
+			} else if writer.operation == "INSERT" {
+				results, err = writer.instance.connection.Insert(batch.records)
+			} else {
+				panic(fmt.Sprint("unknown operation:", writer.operation))
+			}
+			if err != nil {
+				log.Println(commons.ERRORS, err)
+				panic("error calling salesforce api")
+			}
+			if len(batch.records) != len(results) {
+				log.Println(commons.ERRORS, results)
+				panic("incorrect result returned salesforce api")
+			}
+			for i, report := range batch.reports {
+				result := results[i]
+				if result.Success {
+					report.Success(result.Created, result.Id)
+				} else {
+					report.Error(result.Errors.Message)
 				}
 			}
 			// empty batch
@@ -167,10 +176,14 @@ func (writer *ForceWriter) Flush() error {
 }
 
 func (writer *ForceWriter) Close() error {
+	if writer.workers == nil {
+		return nil
+	}
 	writer.Flush()
 	// wait all workers have finished
 	for i := cap(writer.workers); i > 0; i-- {
 		<-writer.workers
 	}
+	writer.workers = nil
 	return nil
 }

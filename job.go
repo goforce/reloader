@@ -14,6 +14,7 @@ import (
 )
 
 type Globals struct {
+	test      bool
 	values    eval.Values
 	functions eval.Functions
 }
@@ -23,6 +24,23 @@ func (job *Job) Execute(globals *Globals) (err error) {
 	startTime := time.Now()
 	defer func() { log.Println(commons.PROGRESS, " job completed in ", time.Since(startTime)) }()
 	log.Println(commons.PROGRESS, "starting job", job.Label)
+
+	var reporter report.Reporter
+	var sourceReader commons.Reader
+	var targetWriter commons.Writer
+
+	// defer closing of all in correct order
+	defer func() {
+		if targetWriter != nil {
+			targetWriter.Close()
+		}
+		if sourceReader != nil {
+			sourceReader.Close()
+		}
+		if reporter != nil {
+			reporter.Close()
+		}
+	}()
 
 	var source commons.Source
 	if job.Source.Salesforce != nil {
@@ -52,18 +70,12 @@ func (job *Job) Execute(globals *Globals) (err error) {
 		}
 	}
 
-	sourceReader, err := source.NewReader()
-	if sourceReader != nil {
-		defer sourceReader.Close()
-	}
+	sourceReader, err = source.NewReader()
 	if err != nil {
 		return errors.New(fmt.Sprint("error opening source reader in job ", job.Label, " :", err))
 	}
 
-	targetWriter, err := target.NewWriter(targetFields)
-	if targetWriter != nil {
-		defer targetWriter.Close()
-	}
+	targetWriter, err = target.NewWriter(targetFields)
 	if err != nil {
 		return errors.New(fmt.Sprint("error opening target writer in job ", job.Label, " :", err))
 	}
@@ -102,7 +114,6 @@ func (job *Job) Execute(globals *Globals) (err error) {
 	}
 
 	var firstRun bool = true
-	var reporter report.Reporter
 
 NEXTREC:
 	for {
@@ -116,11 +127,10 @@ NEXTREC:
 		if firstRun {
 			// create reporters
 			defaultName := job.Label + time.Now().Format("-20060102150405")
-			reporter = report.NewReporter(&job.Logs, defaultName, commons.GetAllFields(sourceRecord))
-			defer reporter.Close()
+			reporter = report.NewReporter(&job.Logs, defaultName, commons.GetAllFields(sourceRecord), targetFields)
 			firstRun = false
 		}
-		report := reporter.NewReport(sourceRecord)
+		report := reporter.NewReport(sourceRecord, sourceReader.Location())
 
 		// create name resolving function used in expressions
 		context := eval.NewContext()
@@ -168,7 +178,7 @@ NEXTREC:
 				}
 			default:
 				//TODO make fail to be skip and write to skip file
-				panic("skip failed, cannot cast to bool")
+				panic("skip failed, not a bool")
 			}
 		}
 
@@ -213,9 +223,14 @@ NEXTREC:
 				}
 			}
 		}
-		err = targetWriter.Write(targetRecord, report)
-		if err != nil {
-			report.Error(fmt.Sprint("error in formula: ", err))
+		if globals.test {
+			report.Output(targetRecord)
+			report.Success(false, "")
+		} else {
+			err = targetWriter.Write(targetRecord, report)
+			if err != nil {
+				report.Error(fmt.Sprint("error writing target: ", err))
+			}
 		}
 	}
 	err = targetWriter.Flush()

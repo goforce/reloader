@@ -24,10 +24,9 @@ func main() {
 		}
 		return
 	}
-	if config.Logs.Debug == "" {
-		config.Logs.Debug = commons.PROGRESS
-	}
 	log.On(config.Logs.Debug)
+	log.On(commons.PROGRESS)
+	log.On(commons.ERRORS)
 	log.Println(commons.PROGRESS, "config ok")
 
 	// init strategy to connect to salesforce
@@ -56,21 +55,19 @@ func main() {
 		}
 		globalScans[name] = scan
 	}
-	globals := &Globals{}
+	globals := &Globals{test: config.Test}
 	globals.functions = func(name string, args []interface{}) (val interface{}, err error) {
 		switch name {
 		case "SCAN":
-			if len(args) < 2 {
-				return nil, errors.New("function SCAN expected at least 3 parameters, actual: " + fmt.Sprint(len(args)))
-			}
-			scan, ok := globalScans[name]
+			s1 := eval.MustBeString(args, 0, "SCAN")
+			scan, ok := globalScans[s1]
 			if !ok {
-				return nil, errors.New(fmt.Sprint("global lookup not found: ", name))
+				return nil, errors.New(fmt.Sprint("function SCAN: lookup not found:", s1))
 			}
-			var keys = make([]interface{}, len(args)-2)
-			for i := 1; i < len(args)-1; i++ {
-				keys[i-1] = args[i]
+			if len(args) < 3 {
+				return nil, errors.New(fmt.Sprint("function SCAN: at least 3 arguments expected, actual:", len(args)))
 			}
+			keys := args[1 : len(args)-1]
 			val, err = scan(keys, args[len(args)-1])
 			return val, err
 		}

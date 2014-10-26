@@ -17,20 +17,22 @@ const (
 )
 
 type Logs struct {
-	Off     bool `json:"off"`
-	Error   Log  `json:"error"`
-	Success Log  `json:"success"`
-	Skip    Log  `json:"skip"`
+	Off     bool   `json:"off"`
+	Path    string `json:"path"`
+	Error   Log    `json:"error"`
+	Success Log    `json:"success"`
+	Skip    Log    `json:"skip"`
+	Output  Log    `json:"output"`
 }
 
 type Log struct {
-	Path string `json:"path"`
 	Off  bool   `json:"off"`
+	Path string `json:"path"`
 }
 
 type Reporter interface {
 	Close()
-	NewReport(commons.Record) *report
+	NewReport(commons.Record, string) *report
 }
 
 type reporter struct {
@@ -38,12 +40,15 @@ type reporter struct {
 	successWriter *writer
 	errorWriter   *writer
 	fields        []string
+	outputWriter  *writer
+	targetFields  []string
 }
 
 type report struct {
 	reporter *reporter
 	record   commons.Record
 	reported bool
+	location string
 }
 
 type writer struct {
@@ -52,13 +57,28 @@ type writer struct {
 	writer   *csv.Writer
 }
 
-func NewReporter(def *Logs, defaultPath string, fields []string) *reporter {
+func NewReporter(def *Logs, defaultPath string, fields []string, targetFields []string) *reporter {
 	rr := reporter{}
 	rr.fields = make([]string, len(fields))
 	copy(rr.fields, fields)
-	rr.skipWriter = newWriter(def.Skip, defaultPath+"-skip.csv", rr.fields)
-	rr.successWriter = newWriter(def.Success, defaultPath+"-success.csv", append(rr.fields, SUCCESS_LOG_CREATED, SUCCESS_LOG_ID))
-	rr.errorWriter = newWriter(def.Error, defaultPath+"-error.csv", append(rr.fields, ERROR_LOG_MESSAGE))
+	rr.targetFields = make([]string, len(targetFields))
+	copy(rr.targetFields, targetFields)
+	rr.skipWriter = newWriter(
+		def.Skip,
+		filename(def.Path, def.Skip.Path, defaultPath+"-skip.csv"),
+		rr.fields)
+	rr.successWriter = newWriter(
+		def.Success,
+		filename(def.Path, def.Success.Path, defaultPath+"-success.csv"),
+		append(rr.fields, SUCCESS_LOG_CREATED, SUCCESS_LOG_ID))
+	rr.errorWriter = newWriter(
+		def.Error,
+		filename(def.Path, def.Error.Path, defaultPath+"-error.csv"),
+		append(rr.fields, ERROR_LOG_MESSAGE))
+	rr.outputWriter = newWriter(
+		def.Output,
+		filename(def.Path, def.Output.Path, defaultPath+"-output.csv"),
+		rr.targetFields)
 	return &rr
 }
 
@@ -67,10 +87,11 @@ func (rr *reporter) Close() {
 	rr.skipWriter.close()
 	rr.successWriter.close()
 	rr.errorWriter.close()
+	rr.outputWriter.close()
 }
 
-func (rr *reporter) NewReport(record commons.Record) *report {
-	return &report{reporter: rr, record: record, reported: false}
+func (rr *reporter) NewReport(record commons.Record, location string) *report {
+	return &report{reporter: rr, record: record, reported: false, location: location}
 }
 
 func (r *report) Skip() {
@@ -81,8 +102,17 @@ func (r *report) Success(created bool, id string) {
 	r.write(r.reporter.successWriter, fmt.Sprint(created), id)
 }
 
+// Error reports error to error log. If error log is off then error and location is printed using log topic reloader.errors
 func (r *report) Error(message string) {
-	r.write(r.reporter.errorWriter, message)
+	if r.reporter.errorWriter.file == nil {
+		log.Println(commons.ERRORS, "error at:", r.location, " / ", message)
+	} else {
+		r.write(r.reporter.errorWriter, message)
+	}
+}
+
+func (r *report) Output(record commons.Record) {
+	r.reporter.outputWriter.write(r.reporter.targetFields, record)
 }
 
 func (r *report) write(writer *writer, results ...string) {
@@ -93,20 +123,20 @@ func (r *report) write(writer *writer, results ...string) {
 	r.reported = true
 }
 
-func newWriter(def Log, defaultPath string, columns []string) *writer {
-	if def.Off {
-		def.Path = ""
-	} else {
-		if def.Path == "" {
-			def.Path = defaultPath
-		}
+func filename(dir string, path string, defaultFilename string) string {
+	if path == "" {
+		path = defaultFilename
 	}
-	w := &writer{filename: def.Path}
-	if def.Path == "" {
+	return dir + path
+}
+
+func newWriter(def Log, filename string, columns []string) *writer {
+	w := &writer{filename: filename}
+	if def.Off {
 		w.writer = csv.NewWriter(ioutil.Discard)
 	} else {
 		var err error
-		w.file, err = os.Create(defaultPath)
+		w.file, err = os.Create(filename)
 		if err != nil {
 			panic(fmt.Sprint("error creating file:", w.filename, " : ", err))
 		}
