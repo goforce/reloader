@@ -18,7 +18,7 @@ type Config struct {
 	Lookups    map[string]*Lookup `json:"lookups"`
 	Jobs       []*Job             `json:"jobs"`
 	Logs       struct {
-		Off   bool   `json:"off"`
+		Off   *bool  `json:"off"`
 		Debug string `json:"debug"`
 	} `json:"logs"`
 }
@@ -119,14 +119,29 @@ func (config *Config) ValidateAndCompileConfig(resolver func(string) string) []e
 				job.Label = job.Target.Salesforce.GetLabel()
 			}
 		}
-		job.Logs.Error.Off = job.Logs.Error.Off || job.Logs.Off || config.Logs.Off
-		job.Logs.Success.Off = job.Logs.Success.Off || job.Logs.Off || config.Logs.Off
-		job.Logs.Skip.Off = job.Logs.Skip.Off || job.Logs.Off || config.Logs.Off
+		var truebool bool = true
+		var testbool bool = !config.Test
+		job.Logs.Error.Off = onoff(job.Logs.Error.Off, job.Logs.Off, config.Logs.Off, nil)
+		job.Logs.Success.Off = onoff(job.Logs.Success.Off, job.Logs.Off, config.Logs.Off, &truebool)
+		job.Logs.Skip.Off = onoff(job.Logs.Skip.Off, job.Logs.Off, config.Logs.Off, nil)
+		job.Logs.Output.Off = onoff(job.Logs.Output.Off, nil, nil, &testbool)
 	}
 	if len(errs) > 0 {
 		return errs
 	}
 	return nil
+}
+
+func onoff(logOff *bool, jobOff *bool, topOff *bool, defOff *bool) *bool {
+	if logOff != nil {
+		return logOff
+	} else if jobOff != nil {
+		return jobOff
+	} else if topOff != nil {
+		return topOff
+	} else {
+		return defOff
+	}
 }
 
 func (m *Rule) parseExpressionsAndFlags() (err error) {

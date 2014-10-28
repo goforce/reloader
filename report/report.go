@@ -17,7 +17,7 @@ const (
 )
 
 type Logs struct {
-	Off     bool   `json:"off"`
+	Off     *bool  `json:"off"`
 	Path    string `json:"path"`
 	Error   Log    `json:"error"`
 	Success Log    `json:"success"`
@@ -26,7 +26,7 @@ type Logs struct {
 }
 
 type Log struct {
-	Off  bool   `json:"off"`
+	Off  *bool  `json:"off"`
 	Path string `json:"path"`
 }
 
@@ -53,6 +53,7 @@ type report struct {
 
 type writer struct {
 	filename string
+	initf    func()
 	file     *os.File
 	writer   *csv.Writer
 }
@@ -132,24 +133,33 @@ func filename(dir string, path string, defaultFilename string) string {
 
 func newWriter(def Log, filename string, columns []string) *writer {
 	w := &writer{filename: filename}
-	if def.Off {
+	if def.Off != nil && *def.Off {
 		w.writer = csv.NewWriter(ioutil.Discard)
 	} else {
-		var err error
-		w.file, err = os.Create(filename)
-		if err != nil {
-			panic(fmt.Sprint("error creating file:", w.filename, " : ", err))
+		w.initf = func() {
+			var err error
+			w.file, err = os.Create(filename)
+			if err != nil {
+				panic(fmt.Sprint("error creating file:", w.filename, " : ", err))
+			}
+			w.writer = csv.NewWriter(w.file)
+			err = w.writer.Write(columns)
+			if err != nil {
+				panic(fmt.Sprint("error writing log file:", w.filename, " : ", err))
+			}
+			w.initf = nil
 		}
-		w.writer = csv.NewWriter(w.file)
-	}
-	err := w.writer.Write(columns)
-	if err != nil {
-		panic(fmt.Sprint("error writing log file:", w.filename, " : ", err))
+		if def.Off != nil {
+			w.initf()
+		}
 	}
 	return w
 }
 
 func (w *writer) write(fields []string, record commons.Record, results ...string) {
+	if w.initf != nil {
+		w.initf()
+	}
 	row := make([]string, 0, len(fields)+len(results))
 	for _, name := range fields {
 		if value, ok := record.Get(name); ok {
@@ -166,7 +176,7 @@ func (w *writer) write(fields []string, record commons.Record, results ...string
 }
 
 func (w *writer) close() {
-	if w != nil {
+	if w != nil && w.writer != nil {
 		w.writer.Flush()
 		err := w.writer.Error()
 		if err != nil {

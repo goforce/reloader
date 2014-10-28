@@ -223,8 +223,8 @@ NEXTREC:
 				}
 			}
 		}
+		report.Output(targetRecord)
 		if globals.test {
-			report.Output(targetRecord)
 			report.Success(false, "")
 		} else {
 			err = targetWriter.Write(targetRecord, report)

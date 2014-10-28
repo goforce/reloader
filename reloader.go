@@ -17,6 +17,12 @@ import (
 
 func main() {
 
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("reloader failed with ERROR:", r)
+		}
+	}()
+
 	config, errs := ReadConfigFile(os.Args[1], os.Args[2:])
 	if len(errs) > 0 {
 		for _, err := range errs {
