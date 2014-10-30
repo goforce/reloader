@@ -10,11 +10,10 @@ type LookupSource interface {
 }
 
 type Lookup struct {
-	Keys  []string `json:"keys"`
-	Value string   `json:"value"`
+	Keys []string `json:"keys"`
 }
 
-type Scan func([]interface{}, interface{}) (interface{}, error)
+type Scan func([]interface{}, string, interface{}) (interface{}, error)
 
 var GlobalLookups = make(map[string]Scan)
 
@@ -41,9 +40,7 @@ func (lookup *Lookup) GetScan(records []Record) (Scan, error) {
 				}
 			} else {
 				if lastkey {
-					if nv[kv], ok = rec.Get(lookup.Value); !ok {
-						return nil, errors.New(fmt.Sprint("no field found:", key))
-					}
+					nv[kv] = rec
 				} else {
 					nm := make(lookupData)
 					nv[kv] = nm
@@ -52,7 +49,7 @@ func (lookup *Lookup) GetScan(records []Record) (Scan, error) {
 			}
 		}
 	}
-	return func(keys []interface{}, defaultValue interface{}) (interface{}, error) {
+	return func(keys []interface{}, valueField string, defaultValue interface{}) (interface{}, error) {
 		if len(keys) != len(lookup.Keys) {
 			// TODO lookup name or solq+keys (for unnamed lookups) should be shown
 			return nil, errors.New(fmt.Sprintf("incorrect number of key values passed for lookup", lookup))
@@ -61,16 +58,22 @@ func (lookup *Lookup) GetScan(records []Record) (Scan, error) {
 		for i := 0; i < len(keys); i++ {
 			if _, ok := nv[keys[i]]; ok {
 				if i == len(keys)-1 {
-					return nv[keys[i]], nil
+					if rec, ok := nv[keys[i]].(Record); ok {
+						if v, ok := rec.Get(valueField); ok {
+							return v, nil
+						}
+						return nil, errors.New(fmt.Sprint("no field found:", valueField))
+					}
+					return nil, errors.New("internal error: not a record")
 				} else {
 					if nv, ok = nv[keys[i]].(lookupData); !ok {
-						return nil, errors.New("internal error")
+						return nil, errors.New("internal error: not a data")
 					}
 				}
 			} else {
 				return defaultValue, nil
 			}
 		}
-		return nil, errors.New("internal error")
+		return nil, errors.New("internal error: fatal")
 	}, nil
 }

@@ -48,6 +48,7 @@ func main() {
 	// read in all lookups
 	globalScans := make(map[string]commons.Scan)
 	for name, lkp := range config.Lookups {
+		fmt.Println("creating lookup:", name)
 		var source commons.LookupSource
 		if lkp.Source.Salesforce != nil {
 			source = lkp.Source.Salesforce
@@ -66,6 +67,7 @@ func main() {
 		switch name {
 		case "SCAN":
 			s1 := eval.MustBeString(args, 0, "SCAN")
+			s2 := eval.MustBeString(args, len(args)-2, "SCAN")
 			scan, ok := globalScans[s1]
 			if !ok {
 				return nil, errors.New(fmt.Sprint("function SCAN: lookup not found:", s1))
@@ -73,8 +75,8 @@ func main() {
 			if len(args) < 3 {
 				return nil, errors.New(fmt.Sprint("function SCAN: at least 3 arguments expected, actual:", len(args)))
 			}
-			keys := args[1 : len(args)-1]
-			val, err = scan(keys, args[len(args)-1])
+			keys := args[1 : len(args)-2]
+			val, err = scan(keys, s2, args[len(args)-1])
 			return val, err
 		}
 		return nil, eval.NOFUNC{}
