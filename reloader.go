@@ -66,14 +66,14 @@ func main() {
 	globals.functions = func(name string, args []interface{}) (val interface{}, err error) {
 		switch name {
 		case "SCAN":
-			s1 := eval.MustBeString(args, 0, "SCAN")
-			s2 := eval.MustBeString(args, len(args)-2, "SCAN")
+			s1 := eval.MustBeString(args, 0)
+			s2 := eval.MustBeString(args, len(args)-2)
 			scan, ok := globalScans[s1]
 			if !ok {
-				return nil, errors.New(fmt.Sprint("function SCAN: lookup not found:", s1))
+				panic(fmt.Sprint("lookup not found:", s1))
 			}
 			if len(args) < 3 {
-				return nil, errors.New(fmt.Sprint("function SCAN: at least 3 arguments expected, actual:", len(args)))
+				panic(fmt.Sprint("at least 3 arguments expected, actual:", len(args)))
 			}
 			keys := args[1 : len(args)-2]
 			val, err = scan(keys, s2, args[len(args)-1])

@@ -1,7 +1,6 @@
 package force
 
 import (
-	"errors"
 	"fmt"
 	"github.com/goforce/eval"
 	"github.com/goforce/reloader/commons"
@@ -24,9 +23,9 @@ func (target *SalesforceTarget) NewFunctionsSupplier() eval.Functions {
 			// validate number of parameters
 			var np int = (len(args) - 3) / 2
 			if len(args) != np*2+3 {
-				return nil, errors.New("function LOOKUP expected at least 3 parameters plus at least one pair to compare, actual: " + fmt.Sprint(len(args)))
+				panic(fmt.Sprint("expected at least 3 parameters plus at least one pair to compare, actual: ", len(args)))
 			}
-			s1 := eval.MustBeString(args, len(args)-2, "LOOKUP")
+			s1 := eval.MustBeString(args, len(args)-2)
 			fields := make([]string, np)
 			for i := 0; i < np; i++ {
 				fields[i] = args[i*2+1].(string)

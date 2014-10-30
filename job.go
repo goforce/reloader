@@ -85,18 +85,13 @@ func (job *Job) Execute(globals *Globals) (err error) {
 
 	firsts := make(map[string]map[string]struct{})
 	functionsSupplier := func(name string, args []interface{}) (interface{}, error) {
-		switch strings.ToUpper(name) {
+		switch name {
 		case "FIRST":
-			if len(args) != 2 {
-				return nil, errors.New(fmt.Sprint("function FIRST expected 2 parameters, actual: ", len(args)))
-			}
+			eval.NumOfParams(args, 2)
 			if args[1] == nil {
 				return true, nil
 			}
-			name, ok := args[0].(string)
-			if !ok {
-				return nil, errors.New(fmt.Sprint("function FIRST expects first parameter to be string, actual: ", args[0]))
-			}
+			name := eval.MustBeString(args, 0)
 			f, ok := firsts[name]
 			if !ok {
 				f = make(map[string]struct{})
@@ -160,6 +155,18 @@ NEXTREC:
 		})
 		context.AddValues(valuesSupplier)
 		context.AddValues(globals.values)
+		context.AddFunctions(func(name string, args []interface{}) (interface{}, error) {
+			if name == "GET" {
+				eval.NumOfParams(args, 1)
+				s1 := eval.MustBeString(args, 0)
+				if value, ok := sourceRecord.Get(s1); ok {
+					return value, nil
+				} else {
+					panic(fmt.Sprint("no such source field: ", s1))
+				}
+			}
+			return nil, eval.NOFUNC{}
+		})
 		context.AddFunctions(functionsSupplier)
 		context.AddFunctions(targetFunctions)
 		context.AddFunctions(globals.functions)
