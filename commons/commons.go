@@ -32,19 +32,26 @@ type Target interface {
 }
 
 type Reader interface {
+	Fields() []string
 	Read() (Record, error)
 	Location() string
 	Close() error
 }
 
+type Flags map[string]map[string]bool
+
+type UsesFlags interface {
+	SetFlags(Flags)
+}
+
 type Writer interface {
+	SetTest(bool)
+	Fields() []string
 	NewRecord() Record
-	Write(Record, Report) error
+	Write(Record, Report, eval.Context) error
 	Flush() error
 	Close() error
 }
-
-type ValueValidator func(string, interface{}) error
 
 func GetAllFields(rec Record) []string {
 	var flatten func([]string, Record)

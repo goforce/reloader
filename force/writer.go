@@ -5,6 +5,7 @@ import (
 	"fmt"
 	. "github.com/goforce/api/commons"
 	"github.com/goforce/api/soap"
+	"github.com/goforce/eval"
 	"github.com/goforce/log"
 	"github.com/goforce/reloader/commons"
 	"strings"
@@ -29,6 +30,8 @@ type ForceWriter struct {
 	batch           *batchWork
 	workers         chan *batchWork
 	nestedFields    map[string]*DescribeSObjectResult
+	fields          []string
+	test            bool
 }
 
 func (target *SalesforceTarget) NewWriter(fields []string) (commons.Writer, error) {
@@ -56,6 +59,7 @@ func (target *SalesforceTarget) NewWriter(fields []string) (commons.Writer, erro
 		batchSize:    batchSize,
 		workers:      make(chan *batchWork, numWorkers),
 		nestedFields: make(map[string]*DescribeSObjectResult),
+		fields:       fields,
 	}
 	// init workers
 	for i := 0; i < numWorkers; i++ {
@@ -102,6 +106,14 @@ func (target *SalesforceTarget) NewWriter(fields []string) (commons.Writer, erro
 	return writer, nil
 }
 
+func (writer *ForceWriter) SetTest(test bool) {
+	writer.test = test
+}
+
+func (writer *ForceWriter) Fields() []string {
+	return writer.fields
+}
+
 func (writer *ForceWriter) NewRecord() commons.Record {
 	r, err := NewDescribedRecord(writer.sObjectDescribe)
 	for fieldName, describe := range writer.nestedFields {
@@ -117,12 +129,30 @@ func (writer *ForceWriter) NewRecord() commons.Record {
 	return r
 }
 
-func (writer *ForceWriter) Write(record commons.Record, report commons.Report) error {
+func (writer *ForceWriter) Write(record commons.Record, report commons.Report, context eval.Context) error {
+	// pull data for copy operation
+	if writer.operation == "COPY" {
+
+	}
+	// validate all values
+	errs := validateRecord(writer.sObjectDescribe, record.(Record))
+	report.Output(record)
+	if len(errs) > 0 {
+		s := "reloader validation errors:\n"
+		for _, err := range errs {
+			s += "\n" + err.Error()
+		}
+		return errors.New(s)
+	}
 	if writer.batch == nil {
 		writer.batch = <-writer.workers
 	}
-	writer.batch.records = append(writer.batch.records, record.(Record))
-	writer.batch.reports = append(writer.batch.reports, report)
+	if writer.test {
+		report.Success(false, "")
+	} else {
+		writer.batch.records = append(writer.batch.records, record.(Record))
+		writer.batch.reports = append(writer.batch.reports, report)
+	}
 	if len(writer.batch.records) == cap(writer.batch.records) {
 		return writer.Flush()
 	}
@@ -146,6 +176,8 @@ func (writer *ForceWriter) Flush() error {
 				results, err = writer.instance.connection.Update(batch.records)
 			} else if writer.operation == "INSERT" {
 				results, err = writer.instance.connection.Insert(batch.records)
+			} else if writer.operation == " COPY" {
+				results, err = writer.instance.connection.Insert(batch.records)
 			} else {
 				panic(fmt.Sprint("unknown operation:", writer.operation))
 			}
@@ -168,9 +200,9 @@ func (writer *ForceWriter) Flush() error {
 			// empty batch
 			batch.records = make([]Record, 0, writer.batchSize)
 			batch.reports = make([]commons.Report, 0, writer.batchSize)
-			// return worker
-			writer.workers <- batch
 		}
+		// return worker
+		writer.workers <- batch
 	}()
 	return nil
 }

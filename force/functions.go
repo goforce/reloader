@@ -1,6 +1,7 @@
 package force
 
 import (
+	"errors"
 	"fmt"
 	"github.com/goforce/eval"
 	"github.com/goforce/reloader/commons"
@@ -38,13 +39,13 @@ func (target *SalesforceTarget) NewFunctionsSupplier() eval.Functions {
 				source := &SalesforceSource{instance: target.instance, Query: args[0].(string)}
 				scan, err = source.NewScan(&commons.Lookup{Keys: fields})
 				if err != nil {
-					return nil, err
+					panic(errors.New(fmt.Sprint("error creating lookup: ", err.Error())))
 				}
 				target.lookups[lookupName] = scan
 			}
 			var keys = make([]interface{}, np)
 			for i := 0; i < np; i++ {
-				keys[i] = args[i*2+3]
+				keys[i] = args[i*2+2]
 			}
 			val, err = scan(keys, s1, args[len(args)-1])
 			return val, err

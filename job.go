@@ -55,12 +55,14 @@ func (job *Job) Execute(globals *Globals) (err error) {
 		target = job.Target.Csv
 	}
 
-	var targetFields []string = make([]string, 0, len(job.Rules))
-	var aliases map[string]*Rule = make(map[string]*Rule)
-	var skips []*Rule = make([]*Rule, 0, len(job.Rules))
+	var targetFields = make([]string, 0, len(job.Rules))
+	var aliases = make(map[string]*Rule)
+	var skips = make([]*Rule, 0, len(job.Rules))
+	var flags = make(map[string]map[string]bool)
 	for _, rule := range job.Rules {
 		if rule.Target != "" {
 			targetFields = append(targetFields, rule.Target)
+			flags[rule.Target] = rule.flags
 		}
 		if rule.Alias != "" {
 			aliases[strings.ToUpper(rule.Alias)] = rule
@@ -79,6 +81,10 @@ func (job *Job) Execute(globals *Globals) (err error) {
 	if err != nil {
 		return errors.New(fmt.Sprint("error opening target writer in job ", job.Label, " :", err))
 	}
+	if usesFlags, ok := targetWriter.(commons.UsesFlags); ok {
+		usesFlags.SetFlags(flags)
+	}
+	targetWriter.SetTest(globals.test)
 
 	valuesSupplier := target.NewValuesSupplier()
 	targetFunctions := target.NewFunctionsSupplier()
@@ -108,7 +114,9 @@ func (job *Job) Execute(globals *Globals) (err error) {
 		return nil, eval.NOFUNC{}
 	}
 
-	var firstRun bool = true
+	// create reporters
+	defaultName := job.Label + time.Now().Format("-20060102150405")
+	reporter = report.NewReporter(&job.Logs, defaultName, sourceReader.Fields(), targetWriter.Fields())
 
 NEXTREC:
 	for {
@@ -119,12 +127,6 @@ NEXTREC:
 			return errors.New(fmt.Sprint("error reading source ", sourceReader.Location(), "\n", err))
 		}
 
-		if firstRun {
-			// create reporters
-			defaultName := job.Label + time.Now().Format("-20060102150405")
-			reporter = report.NewReporter(&job.Logs, defaultName, commons.GetAllFields(sourceRecord), targetFields)
-			firstRun = false
-		}
 		report := reporter.NewReport(sourceRecord, sourceReader.Location())
 
 		// create name resolving function used in expressions
@@ -219,25 +221,15 @@ NEXTREC:
 				}
 			}
 			if rule.Target != "" && !omit {
-				//						if !m.rules["novalidation"] {
-				//							if err := validateValue(descr, m.Target, rec[m.Source]); err != nil {
-				//								fmt.Println(sourceLine, err)
-				//							}
-				//						}
 				if _, err := targetRecord.Set(rule.Target, targetValue); err != nil {
 					report.Error(err.Error())
 					goto NEXTREC
 				}
 			}
 		}
-		report.Output(targetRecord)
-		if globals.test {
-			report.Success(false, "")
-		} else {
-			err = targetWriter.Write(targetRecord, report)
-			if err != nil {
-				report.Error(fmt.Sprint("error writing target: ", err))
-			}
+		err = targetWriter.Write(targetRecord, report, context)
+		if err != nil {
+			report.Error(fmt.Sprint("error writing target: ", err))
 		}
 	}
 	err = targetWriter.Flush()

@@ -111,6 +111,15 @@ func (config *Config) ValidateAndCompileConfig(resolver func(string) string) []e
 			}
 			aliases[alias] = true
 		}
+	}
+	if len(errs) > 0 {
+		return errs
+	}
+	return nil
+}
+
+func (config *Config) SetConfigDefaults() {
+	for _, job := range config.Jobs {
 		// job label will be used to default log names
 		if job.Label == "" {
 			if job.Target.Csv != nil {
@@ -119,6 +128,7 @@ func (config *Config) ValidateAndCompileConfig(resolver func(string) string) []e
 				job.Label = job.Target.Salesforce.GetLabel()
 			}
 		}
+		// default logs
 		var truebool bool = true
 		var testbool bool = !config.Test
 		job.Logs.Error.Off = onoff(job.Logs.Error.Off, job.Logs.Off, config.Logs.Off, nil)
@@ -126,10 +136,6 @@ func (config *Config) ValidateAndCompileConfig(resolver func(string) string) []e
 		job.Logs.Skip.Off = onoff(job.Logs.Skip.Off, job.Logs.Off, config.Logs.Off, nil)
 		job.Logs.Output.Off = onoff(job.Logs.Output.Off, nil, nil, &testbool)
 	}
-	if len(errs) > 0 {
-		return errs
-	}
-	return nil
 }
 
 func onoff(logOff *bool, jobOff *bool, topOff *bool, defOff *bool) *bool {

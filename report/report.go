@@ -105,7 +105,7 @@ func (r *report) Success(created bool, id string) {
 
 // Error reports error to error log. If error log is off then error and location is printed using log topic reloader.errors
 func (r *report) Error(message string) {
-	if r.reporter.errorWriter.file == nil {
+	if r.reporter.errorWriter.file == nil && r.reporter.errorWriter.initf == nil {
 		log.Println(commons.ERRORS, "error at:", r.location, " / ", message)
 	} else {
 		r.write(r.reporter.errorWriter, message)

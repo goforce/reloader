@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	data "github.com/goforce/api/commons"
+	"github.com/goforce/eval"
 	"github.com/goforce/reloader/commons"
 	"os"
 	"unicode/utf8"
@@ -15,6 +16,7 @@ type CsvWriter struct {
 	file     *os.File
 	writer   *csv.Writer
 	fields   []string
+	test     bool
 }
 
 func (target *CsvTarget) NewWriter(fields []string) (commons.Writer, error) {
@@ -34,18 +36,29 @@ func (target *CsvTarget) NewWriter(fields []string) (commons.Writer, error) {
 	return w, w.writer.Write(w.fields)
 }
 
+func (w *CsvWriter) Fields() []string {
+	return w.fields
+}
+
+func (w *CsvWriter) SetTest(test bool) {
+	w.test = test
+}
+
 func (w *CsvWriter) NewRecord() commons.Record {
 	return &CsvRecord{fields: w.fields, values: make(map[string]string)}
 }
 
-func (w *CsvWriter) Write(record commons.Record, report commons.Report) error {
+func (w *CsvWriter) Write(record commons.Record, report commons.Report, context eval.Context) (err error) {
 	row := make([]string, len(w.fields))
 	for i, name := range w.fields {
 		if value, ok := record.Get(name); ok {
 			row[i] = data.String(value)
 		}
 	}
-	err := w.writer.Write(row)
+	if !w.test {
+		err = w.writer.Write(row)
+	}
+	report.Output(record)
 	if err == nil {
 		report.Success(true, "")
 	} else {

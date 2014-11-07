@@ -5,11 +5,13 @@ import (
 	. "github.com/goforce/api/commons"
 	"github.com/goforce/log"
 	"github.com/goforce/reloader/commons"
+	"github.com/goforce/reloader/force/soqlparser"
 )
 
 type ForceReader struct {
 	*QueryReader
-	id string
+	id     string
+	fields []string
 }
 
 func (s *SalesforceSource) NewReader() (commons.Reader, error) {
@@ -24,7 +26,11 @@ func (s *SalesforceSource) NewReader() (commons.Reader, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &ForceReader{reader, ""}, nil
+	return &ForceReader{reader, "", soqlparser.SoqlFields(s.Query)}, nil
+}
+
+func (reader *ForceReader) Fields() []string {
+	return reader.fields
 }
 
 func (reader *ForceReader) Read() (commons.Record, error) {

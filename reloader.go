@@ -11,7 +11,10 @@ import (
 	"github.com/goforce/reloader/commons"
 	"github.com/goforce/reloader/force"
 	"io/ioutil"
+	"math/big"
 	"os"
+	"reflect"
+	"strings"
 	"time"
 )
 
@@ -23,13 +26,25 @@ func main() {
 		}
 	}()
 
-	config, errs := ReadConfigFile(os.Args[1], os.Args[2:])
+	testMode := false
+	args := os.Args[1:]
+	if args[0] == "--test" {
+		testMode = true
+		args = args[1:]
+	}
+
+	config, errs := ReadConfigFile(args[0], args[1:])
 	if len(errs) > 0 {
 		for _, err := range errs {
 			fmt.Println(err)
 		}
 		return
 	}
+
+	config.Test = config.Test || testMode
+
+	config.SetConfigDefaults()
+
 	log.On(config.Logs.Debug)
 	log.On(commons.PROGRESS)
 	log.On(commons.ERRORS)
@@ -48,7 +63,6 @@ func main() {
 	// read in all lookups
 	globalScans := make(map[string]commons.Scan)
 	for name, lkp := range config.Lookups {
-		fmt.Println("creating lookup:", name)
 		var source commons.LookupSource
 		if lkp.Source.Salesforce != nil {
 			source = lkp.Source.Salesforce
@@ -72,12 +86,28 @@ func main() {
 			if !ok {
 				panic(fmt.Sprint("lookup not found:", s1))
 			}
-			if len(args) < 3 {
-				panic(fmt.Sprint("at least 3 arguments expected, actual:", len(args)))
-			}
+			eval.MinNumOfParams(args, 3)
 			keys := args[1 : len(args)-2]
 			val, err = scan(keys, s2, args[len(args)-1])
 			return val, err
+		case "BOOL":
+			eval.NumOfParams(args, 1)
+			value := args[0]
+			if value == nil {
+				return false, nil
+			}
+			switch value.(type) {
+			case bool:
+				return value, nil
+			case string:
+				s := strings.ToUpper(value.(string))
+				return s == "Y" || s == "YES" || s == "ACTIVE" || s == "TRUE" || s == "ON" || s == "1", nil
+			case *big.Rat:
+				r := value.(*big.Rat)
+				return r.Num().Int64() == 0, nil
+			default:
+				panic(fmt.Sprint("can not cast to boolean: ", reflect.TypeOf(value), " / ", value))
+			}
 		}
 		return nil, eval.NOFUNC{}
 	}

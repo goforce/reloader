@@ -44,6 +44,13 @@ func (c *CsvSource) NewReader() (commons.Reader, error) {
 	return r, nil
 }
 
+func (r *CsvReader) Fields() []string {
+	if r == nil {
+		return make([]string, 0)
+	}
+	return r.fields
+}
+
 func (r *CsvReader) Read() (commons.Record, error) {
 	values, err := r.reader.Read()
 	if err != nil {
