@@ -7,6 +7,7 @@ import (
 	data "github.com/goforce/api/commons"
 	"github.com/goforce/eval"
 	"github.com/goforce/reloader/commons"
+	"io/ioutil"
 	"os"
 	"unicode/utf8"
 )
@@ -21,14 +22,20 @@ type CsvWriter struct {
 
 func (target *CsvTarget) NewWriter(fields []string) (commons.Writer, error) {
 	var err error
-	w := &CsvWriter{filename: target.Path}
-	w.file, err = os.Create(target.Path)
-	if err != nil {
-		return nil, errors.New(fmt.Sprint("cannot open file:", target.Path))
+	w := &CsvWriter{}
+	if target.Path != nil {
+		w.filename = *target.Path
+		w.file, err = os.Create(*target.Path)
+		if err != nil {
+			return nil, errors.New(fmt.Sprint("cannot open file:", target.Path))
+		}
+		w.writer = csv.NewWriter(w.file)
+	} else {
+		w.filename = "NUL"
+		w.writer = csv.NewWriter(ioutil.Discard)
 	}
-	w.writer = csv.NewWriter(w.file)
 	if target.Comma != "" {
-		c, _ := utf8.DecodeRuneInString(target.Path)
+		c, _ := utf8.DecodeRuneInString(target.Comma)
 		w.writer.Comma = c
 	}
 	w.fields = make([]string, len(fields))
