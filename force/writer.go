@@ -176,6 +176,8 @@ func (writer *ForceWriter) Flush() error {
 				results, err = writer.instance.connection.Update(batch.records)
 			} else if writer.operation == "INSERT" {
 				results, err = writer.instance.connection.Insert(batch.records)
+			} else if writer.operation == "DELETE" {
+				results, err = writer.instance.connection.Delete(batch.records)
 			} else if writer.operation == " COPY" {
 				results, err = writer.instance.connection.Insert(batch.records)
 			} else {
