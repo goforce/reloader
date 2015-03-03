@@ -20,6 +20,10 @@ import (
 
 func main() {
 
+	if len(os.Args) <= 1 {
+		fmt.Println("reloader [--test] <config-file.json> [param1 param2 ...]")
+	}
+
 	defer func() {
 		if r := recover(); r != nil {
 			fmt.Println("reloader failed with ERROR:", r)

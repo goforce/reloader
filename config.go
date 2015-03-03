@@ -12,15 +12,15 @@ import (
 )
 
 type Config struct {
-	Test       bool               `json:"test"`
+	Test bool `json:"test"`
+	Logs struct {
+		Off   *bool  `json:"off"`
+		Debug string `json:"debug"`
+	} `json:"logs"`
 	Salesforce *force.Salesforce  `json:"salesforce"`
 	Csv        *csv.Csv           `json:"csv"`
 	Lookups    map[string]*Lookup `json:"lookups"`
 	Jobs       []*Job             `json:"jobs"`
-	Logs       struct {
-		Off   *bool  `json:"off"`
-		Debug string `json:"debug"`
-	} `json:"logs"`
 }
 
 type Lookup struct {
